@@ -13,6 +13,42 @@ use crate::{
 use self::model::{CancelAllOrderRequest, CancelOrderRequest, InstrumentsInfoRequest};
 use self::model::{CancelAllOrderResponse, CancelOrderResponse, InstrumentsInfoResponse, Response};
 
+#[macro_export]
+macro_rules! handle {
+    ($name:ident, $endpoint:expr, $method:ident, $params:expr, $request:ident, $response:ident) => {
+        pub async fn $name(
+            &self,
+            request: $request,
+        ) -> Result<Response<$response>, reqwest::Error> {
+            self.request(
+                $endpoint.to_string(),
+                Method::$method,
+                Some($params(request)),
+            )
+            .await
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! handle_sig {
+    ($name:ident, $endpoint:expr, $method:ident, $params:expr, $request:ident, $response:ident) => {
+        pub async fn $name(
+            &self,
+            request: $request,
+            recv_window: u64,
+        ) -> Result<Response<$response>, reqwest::Error> {
+            self.request_signed(
+                $endpoint.to_string(),
+                Method::$method,
+                recv_window,
+                Some($params(request)),
+            )
+            .await
+        }
+    };
+}
+
 pub enum Params<T> {
     Query(T),
     Body(T),
@@ -38,45 +74,30 @@ impl Client {
         }
     }
 
-    pub async fn cancel_order(
-        &self,
-        request: CancelOrderRequest,
-        recv_window: u64,
-    ) -> Result<Response<CancelOrderResponse>, reqwest::Error> {
-        self.request_signed(
-            "/v5/order/cancel".to_string(),
-            Method::POST,
-            recv_window,
-            Some(Params::Body(request)),
-        )
-        .await
-    }
-
-    pub async fn cancel_all_order(
-        &self,
-        request: CancelAllOrderRequest,
-        recv_window: u64,
-    ) -> Result<Response<CancelAllOrderResponse>, reqwest::Error> {
-        self.request_signed(
-            "/v5/order/cancel-all".to_string(),
-            Method::POST,
-            recv_window,
-            Some(Params::Body(request)),
-        )
-        .await
-    }
-
-    pub async fn get_instruments_info(
-        &self,
-        request: InstrumentsInfoRequest,
-    ) -> Result<Response<InstrumentsInfoResponse>, reqwest::Error> {
-        self.request(
-            "/v5/market/instruments-info".to_string(),
-            Method::GET,
-            Some(Params::Query(request)),
-        )
-        .await
-    }
+    handle_sig!(
+        cancel_order,
+        "/v5/order/cancel",
+        POST,
+        Params::Body,
+        CancelOrderRequest,
+        CancelOrderResponse
+    );
+    handle_sig!(
+        cancel_all_orders,
+        "/v5/order/cancel-all",
+        POST,
+        Params::Body,
+        CancelAllOrderRequest,
+        CancelAllOrderResponse
+    );
+    handle!(
+        get_instruments_info,
+        "/v5/market/instruments-info",
+        GET,
+        Params::Query,
+        InstrumentsInfoRequest,
+        InstrumentsInfoResponse
+    );
 
     async fn request<P: Serialize, R: DeserializeOwned>(
         &self,
