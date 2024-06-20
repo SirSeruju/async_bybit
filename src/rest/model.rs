@@ -29,12 +29,12 @@ where
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Response<T: DeserializeOwned> {
-    ret_code: u64,
-    ret_msg: String,
+    pub ret_code: u64,
+    pub ret_msg: String,
     #[serde(deserialize_with = "deserialize_empty_object")]
-    result: Option<T>,
-    ret_ext_info: HashMap<String, String>,
-    time: u64,
+    pub result: Option<T>,
+    pub ret_ext_info: HashMap<String, String>,
+    pub time: u64,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
