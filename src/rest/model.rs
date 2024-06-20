@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use serde::{de::DeserializeOwned, Deserialize, Deserializer, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 
 pub fn deserialize_empty_object<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
 where
@@ -37,9 +38,51 @@ pub struct Response<T: DeserializeOwned> {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(rename_all = "lowercase")]
+pub enum Category {
+    Spot,
+    Linear,
+    Inverse,
+    Option,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub enum Side {
+    Buy,
+    Sell,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub enum OrderType {
+    Market,
+    Limit,
+}
+
+#[derive(Serialize_repr, Deserialize_repr, Debug, Clone)]
+#[repr(u8)]
+pub enum PositionIdx {
+    Both = 0,
+    Long = 1,
+    Short = 2,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(rename_all = "PascalCase")]
+pub enum TriggerPrice {
+    MarkPrice,
+    IndexPrice,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub enum TpslMode {
+    Full,
+    Partial,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CancelOrderRequest {
-    pub category: String,
+    pub category: Category,
     pub symbol: String,
     pub order_id: Option<String>,
     pub order_link_id: Option<String>,
@@ -56,12 +99,12 @@ pub struct CancelOrderResponse {
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CancelAllOrderRequest {
-    pub category: String,
+    pub category: Category,
     pub symbol: Option<String>,
     pub base_coin: Option<String>,
     pub settle_coin: Option<String>,
     pub order_filter: Option<String>,
-    pub stop_order_type: Option<String>,
+    pub stop_order_type: Option<OrderType>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -74,7 +117,7 @@ pub struct CancelAllOrderResponse {
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct InstrumentsInfoRequest {
-    pub category: String,
+    pub category: Category,
     pub symbol: Option<String>,
     pub status: Option<String>,
     pub base_coin: Option<String>,
@@ -85,7 +128,7 @@ pub struct InstrumentsInfoRequest {
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct InstrumentsInfoResponse {
-    pub category: String,
+    pub category: Category,
     pub list: Vec<InstrumentInfo>,
     pub next_page_cursor: String,
 }
@@ -143,45 +186,45 @@ pub struct LotSizeFilter {
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PlaceOrderRequest {
-    pub category: String,
+    pub category: Category,
     pub symbol: String,
     pub is_leverage: Option<u8>,
-    pub side: String,
-    pub order_type: String,
+    pub side: Side,
+    pub order_type: OrderType,
     pub qty: String,
     pub market_unit: Option<String>,
     pub price: Option<String>,
     pub trigger_direction: Option<u8>,
     pub order_filter: Option<String>,
     pub trigger_price: Option<String>,
-    pub trigger_by: Option<String>,
+    pub trigger_by: Option<TriggerPrice>,
     pub order_iv: Option<String>,
     pub time_in_force: Option<String>,
-    pub position_idx: Option<u8>,
+    pub position_idx: Option<PositionIdx>,
     pub order_link_id: Option<String>,
     pub take_profit: Option<String>,
     pub stop_loss: Option<String>,
-    pub tp_trigger_by: Option<String>,
-    pub sl_trigger_by: Option<String>,
+    pub tp_trigger_by: Option<TriggerPrice>,
+    pub sl_trigger_by: Option<TriggerPrice>,
     pub reduce_only: Option<bool>,
     pub close_on_trigger: Option<bool>,
     pub smp_type: Option<String>,
     pub mmp: Option<bool>,
-    pub tpsl_mode: Option<String>,
+    pub tpsl_mode: Option<TpslMode>,
     pub tp_limit_price: Option<String>,
     pub sl_limit_price: Option<String>,
-    pub tp_order_type: Option<String>,
-    pub sl_order_type: Option<String>,
+    pub tp_order_type: Option<OrderType>,
+    pub sl_order_type: Option<OrderType>,
 }
 
 impl Default for PlaceOrderRequest {
     fn default() -> Self {
         PlaceOrderRequest {
-            category: "".to_string(),
+            category: Category::Spot,
             symbol: "".to_string(),
             is_leverage: None,
-            side: "".to_string(),
-            order_type: "".to_string(),
+            side: Side::Buy,
+            order_type: OrderType::Limit,
             qty: "".to_string(),
             market_unit: None,
             price: None,
