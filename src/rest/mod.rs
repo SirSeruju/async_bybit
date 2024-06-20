@@ -10,8 +10,13 @@ use crate::{
     Credentials,
 };
 
-use self::model::{CancelAllOrderRequest, CancelOrderRequest, InstrumentsInfoRequest};
-use self::model::{CancelAllOrderResponse, CancelOrderResponse, InstrumentsInfoResponse, Response};
+use self::model::{
+    CancelAllOrderRequest, CancelOrderRequest, InstrumentsInfoRequest, PlaceOrderRequest,
+};
+use self::model::{
+    CancelAllOrderResponse, CancelOrderResponse, InstrumentsInfoResponse, PlaceOrderResponse,
+    Response,
+};
 
 #[macro_export]
 macro_rules! handle {
@@ -74,6 +79,14 @@ impl Client {
         }
     }
 
+    handle_sig!(
+        place_order,
+        "/v5/order/create",
+        POST,
+        Params::Body,
+        PlaceOrderRequest,
+        PlaceOrderResponse
+    );
     handle_sig!(
         cancel_order,
         "/v5/order/cancel",

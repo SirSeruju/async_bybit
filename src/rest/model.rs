@@ -139,3 +139,80 @@ pub struct LotSizeFilter {
     pub post_only_max_order_qty: String,
     pub min_notional_value: String,
 }
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaceOrderRequest {
+    pub category: String,
+    pub symbol: String,
+    pub is_leverage: Option<u8>,
+    pub side: String,
+    pub order_type: String,
+    pub qty: String,
+    pub market_unit: Option<String>,
+    pub price: Option<String>,
+    pub trigger_direction: Option<u8>,
+    pub order_filter: Option<String>,
+    pub trigger_price: Option<String>,
+    pub trigger_by: Option<String>,
+    pub order_iv: Option<String>,
+    pub time_in_force: Option<String>,
+    pub position_idx: Option<u8>,
+    pub order_link_id: Option<String>,
+    pub take_profit: Option<String>,
+    pub stop_loss: Option<String>,
+    pub tp_trigger_by: Option<String>,
+    pub sl_trigger_by: Option<String>,
+    pub reduce_only: Option<bool>,
+    pub close_on_trigger: Option<bool>,
+    pub smp_type: Option<String>,
+    pub mmp: Option<bool>,
+    pub tpsl_mode: Option<String>,
+    pub tp_limit_price: Option<String>,
+    pub sl_limit_price: Option<String>,
+    pub tp_order_type: Option<String>,
+    pub sl_order_type: Option<String>,
+}
+
+impl Default for PlaceOrderRequest {
+    fn default() -> Self {
+        PlaceOrderRequest {
+            category: "".to_string(),
+            symbol: "".to_string(),
+            is_leverage: None,
+            side: "".to_string(),
+            order_type: "".to_string(),
+            qty: "".to_string(),
+            market_unit: None,
+            price: None,
+            trigger_direction: None,
+            order_filter: None,
+            trigger_price: None,
+            trigger_by: None,
+            order_iv: None,
+            time_in_force: None,
+            position_idx: None,
+            order_link_id: None,
+            take_profit: None,
+            stop_loss: None,
+            tp_trigger_by: None,
+            sl_trigger_by: None,
+            reduce_only: None,
+            close_on_trigger: None,
+            smp_type: None,
+            mmp: None,
+            tpsl_mode: None,
+            tp_limit_price: None,
+            sl_limit_price: None,
+            tp_order_type: None,
+            sl_order_type: None,
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaceOrderResponse {
+    pub order_id: String,
+    pub order_link_id: String,
+}
