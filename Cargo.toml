@@ -1,12 +1,12 @@
 [package]
-name = "async_bybit"
+name = "bybit_async"
 version = "0.0.1"
 license = "MIT"
 authors = []
 edition = "2021"
 
 [lib]
-name = "async_bybit"
+name = "bybit_async"
 path = "src/lib.rs"
 
 [dependencies]
