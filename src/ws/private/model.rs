@@ -1,4 +1,68 @@
+use serde::de::IntoDeserializer;
 use serde::{Deserialize, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
+
+fn empty_string_is_none<'de, D, T>(de: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::Deserialize<'de>,
+{
+    let opt = Option::<String>::deserialize(de)?;
+    let opt = opt.as_ref().map(String::as_str);
+    match opt {
+        None | Some("") => Ok(None),
+        Some(s) => T::deserialize(s.into_deserializer()).map(Some),
+    }
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub enum Side {
+    Buy,
+    Sell,
+}
+
+#[derive(Serialize_repr, Deserialize_repr, Debug, Clone)]
+#[repr(u8)]
+pub enum PositionIdx {
+    Both = 0,
+    Long = 1,
+    Short = 2,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub enum OrderStatus {
+    New,
+    PartiallyFilled,
+    Untriggered,
+    Rejected,
+    PartiallyFilledCanceled,
+    Filled,
+    Cancelled,
+    Triggered,
+    Deactivated,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub enum TimeInForce {
+    GTC,
+    IOC,
+    FOK,
+    PostOnly,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub enum OrderType {
+    Market,
+    Limit,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(rename_all = "PascalCase")]
+pub enum TriggerPrice {
+    LastPrice,
+    MarkPrice,
+    IndexPrice,
+}
 
 /// The pong/subscription response.
 #[derive(Deserialize, Debug, Clone)]
@@ -44,14 +108,14 @@ pub struct Position {
     /// Symbol name.
     pub symbol: String,
     /// Position side: `Buy`, `Sell`.
-    pub side: String,
+    pub side: Side,
     /// Position size.
     pub size: String,
     /// Used to identify positions in different position modes.
     /// - 0 one-way mode position.
     /// - 1 Buy side of hedge-mode position.
     /// - 2 Sell side of hedge-mode position.
-    pub position_idx: u8,
+    pub position_idx: PositionIdx,
     /// Trade mode. 0: cross margin, 1: isolated margin. Always 0 under unified margin account.
     pub trade_mode: u8,
     /// Position value.
@@ -129,7 +193,7 @@ pub struct Execution {
     /// User customized order ID.
     pub order_link_id: String,
     /// Side. `Buy`, `Sell`.
-    pub side: String,
+    pub side: Side,
     /// Order price.
     pub order_price: String,
     /// Order qty.
@@ -137,7 +201,7 @@ pub struct Execution {
     /// The remaining qty not executed.
     pub leaves_qty: String,
     /// Order type. `Market`, `Limit`.
-    pub order_type: String,
+    pub order_type: OrderType,
     /// Stop order type. If the order is not stop order, any type is not returned.
     pub stop_order_type: String,
     /// Executed trading fee.
@@ -195,11 +259,11 @@ pub struct Order {
     /// Order qty.
     pub qty: String,
     /// Side. `Buy`, `Sell`.
-    pub side: String,
+    pub side: Side,
     /// Position index. Used to identify positions in different position modes.
-    pub position_idx: u8,
+    pub position_idx: PositionIdx,
     /// Order status.
-    pub order_status: String,
+    pub order_status: OrderStatus,
     /// Cancel type.
     pub cancel_type: String,
     /// Reject reason.
@@ -217,9 +281,9 @@ pub struct Order {
     /// Cumulative executed trading fee.
     pub cum_exec_fee: String,
     /// Time in force.
-    pub time_in_force: String,
+    pub time_in_force: TimeInForce,
     /// Order type. `Market`, `Limit`.
-    pub order_type: String,
+    pub order_type: OrderType,
     /// Stop order type.
     pub stop_order_type: String,
     /// Implied volatility.
@@ -231,13 +295,16 @@ pub struct Order {
     /// Stop loss price.
     pub stop_loss: String,
     /// The price type to trigger take profit.
-    pub tp_trigger_by: String,
+    #[serde(deserialize_with = "empty_string_is_none")]
+    pub tp_trigger_by: Option<TriggerPrice>,
     /// The price type to trigger stop loss.
-    pub sl_trigger_by: String,
+    #[serde(deserialize_with = "empty_string_is_none")]
+    pub sl_trigger_by: Option<TriggerPrice>,
     /// Trigger direction. 1: rise, 2: fall.
     pub trigger_direction: u8,
     /// The price type of trigger price.
-    pub trigger_by: String,
+    #[serde(deserialize_with = "empty_string_is_none")]
+    pub trigger_by: Option<TriggerPrice>,
     /// Last price when place the order. For linear only.
     pub last_price_on_created: String,
     /// Reduce only. `true` means reduce position size.

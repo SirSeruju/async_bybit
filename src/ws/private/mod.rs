@@ -58,10 +58,17 @@ impl Client {
                         match pck {
                             Some(pck) => match pck {
                                 Ok(pck) => match pck {
-                                    Message::Text(msg) => {send_subscribers(
-                                        subscribers_c.clone(),
-                                        serde_json::from_str::<model::Response>(&msg).unwrap()
-                                    )},
+                                    Message::Text(msg) => {
+                                        let data = serde_json::from_str::<model::Response>(&msg);
+                                        let data = match data {
+                                            Ok(v) => v,
+                                            Err(e) => {
+                                                eprintln!("Error: {:?} with {:?}", e, msg);
+                                                continue;
+                                            },
+                                        };
+                                        send_subscribers(subscribers_c.clone(), data);
+                                    },
                                     _ => {},
                                 },
                                 Err(e) => eprintln!("Error: {:?}", e),

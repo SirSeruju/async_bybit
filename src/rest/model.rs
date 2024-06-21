@@ -69,6 +69,7 @@ pub enum PositionIdx {
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "PascalCase")]
 pub enum TriggerPrice {
+    LastPrice,
     MarkPrice,
     IndexPrice,
 }
