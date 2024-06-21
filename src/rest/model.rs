@@ -81,6 +81,14 @@ pub enum TpslMode {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
+pub enum TimeInForce {
+    GTC,
+    IOC,
+    FOK,
+    PostOnly,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CancelOrderRequest {
     pub category: Category,
@@ -200,7 +208,7 @@ pub struct PlaceOrderRequest {
     pub trigger_price: Option<String>,
     pub trigger_by: Option<TriggerPrice>,
     pub order_iv: Option<String>,
-    pub time_in_force: Option<String>,
+    pub time_in_force: Option<TimeInForce>,
     pub position_idx: Option<PositionIdx>,
     pub order_link_id: Option<String>,
     pub take_profit: Option<String>,
