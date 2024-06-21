@@ -12,7 +12,7 @@ use futures_util::sink::SinkExt;
 use futures_util::{Future, StreamExt};
 use tokio::sync::mpsc::UnboundedSender;
 use tokio_tungstenite::connect_async;
-use tokio_tungstenite::tungstenite::{protocol::Message};
+use tokio_tungstenite::tungstenite::protocol::Message;
 
 use crate::util::{millis, sign};
 use crate::Credentials;
@@ -42,7 +42,7 @@ fn send_subscribers<E: Clone>(subscribers: Arc<Mutex<Vec<UnboundedSender<E>>>>, 
 
 pub struct ClientBuilder {
     credentials: Credentials,
-    on_connect: Option<fn() -> Pin<Box<dyn Future<Output = ()> + Send>>>,
+    on_connect: Option<fn(client: Client) -> Pin<Box<dyn Future<Output = ()> + Send>>>,
 }
 
 impl ClientBuilder {
@@ -55,7 +55,7 @@ impl ClientBuilder {
 
     pub fn on_connect(
         mut self,
-        on_connect: Option<fn() -> Pin<Box<dyn Future<Output = ()> + Send>>>,
+        on_connect: Option<fn(client: Client) -> Pin<Box<dyn Future<Output = ()> + Send>>>,
     ) -> Self {
         self.on_connect = on_connect;
         self
@@ -74,18 +74,15 @@ pub struct Client {
 impl Client {
     fn new(
         credentials: Credentials,
-        on_connect: Option<fn() -> Pin<Box<dyn Future<Output = ()> + Send>>>,
+        on_connect: Option<fn(client: Client) -> Pin<Box<dyn Future<Output = ()> + Send>>>,
     ) -> Self {
         let (sx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let subscribers = Arc::new(Mutex::new(Vec::new()));
 
+        let sx_c = sx.clone();
         let subscribers_c = subscribers.clone();
         tokio::spawn(async move {
             loop {
-                if on_connect.is_some() {
-                    on_connect.unwrap()().await;
-                }
-
                 let (mut sender, mut receiver) =
                     match connect_async(MAINNET_PRIVATE).await.map(|x| x.0.split()) {
                         Ok(v) => v,
@@ -95,6 +92,18 @@ impl Client {
                             continue;
                         }
                     };
+                sx_c.send(Message::Text(auth_req(&credentials))).unwrap();
+                let sx_c_c = sx_c.clone();
+                let subscribers_c_c = subscribers_c.clone();
+                if on_connect.is_some() {
+                    tokio::spawn(async move {
+                        on_connect.unwrap()(Client {
+                            sender: sx_c_c,
+                            subscribers: subscribers_c_c,
+                        })
+                        .await
+                    });
+                }
                 loop {
                     tokio::select! {
                         pck = receiver.next() => {
@@ -147,8 +156,6 @@ impl Client {
                 tokio::time::sleep(Duration::from_secs(20)).await;
             }
         });
-
-        sx.send(Message::Text(auth_req(&credentials))).unwrap();
         Client {
             sender: sx,
             subscribers,
