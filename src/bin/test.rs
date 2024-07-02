@@ -1,48 +1,78 @@
 use std::time::Duration;
 
-use async_bybit::rest::model::InstrumentsInfoRequest;
-use async_bybit::rest::Client;
-use async_bybit::ws::private::{model, Client as ClientWS};
-use async_bybit::Credentials;
+use rand::{distributions::Alphanumeric, Rng};
 
-const URL: &str = "https://api.bybit.com";
+use bybit_async::rest::model::{
+    CancelAllOrderRequest, Category, OrderType, PlaceOrderRequest, PositionIdx, Side,
+};
+use bybit_async::rest::Client;
+use bybit_async::ws::private::{model, Client as ClientWS};
+use bybit_async::Credentials;
 
 #[tokio::main]
 async fn main() {
     let credentials = Credentials {
-        api_key: "ykd3WyNknCn1mqTjD1".to_owned(),
-        secret: "5UjnYErTJycxv9ZL4pg5v4Mqv7HS2tlA7CC8".to_owned(),
+        api_key: "".to_owned(), // Testnet keys
+        secret: "".to_owned(),  // Testnet keys
     };
-    let client = Client::new(credentials.clone(), URL.to_string(), None);
-    // println!("CL: {:?}", client.get_signed("https://api.bybit.com/v5/position/list".to_string(), ""));
-    let res = client
-        .get_instruments_info(InstrumentsInfoRequest {
-            category: "linear".to_string(),
-            symbol: None,
-            status: None,
-            base_coin: None,
-            limit: None,
-            cursor: None,
-        })
-        .await;
-    println!("CL: {:?}", res);
-    let client_ws = ClientWS::new(credentials).await.unwrap();
+    let client = Client::new_testnet(credentials.clone(), None);
+    let client_ws = ClientWS::new_testnet(credentials);
 
-    let (sx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-    client_ws.subscribe(sx);
-    tokio::spawn(async move {
-        while let Some(msg) = rx.recv().await {
-            println!("MSG: {:?}", msg);
-        }
-    });
-    tokio::time::sleep(Duration::from_secs(2)).await;
-    client_ws
-        .send_op(model::Op {
+    let (sender, mut receiver) = client_ws.connect().await.unwrap();
+    sender
+        .send(model::Op {
             req_id: None,
             op: "subscribe".to_string(),
             args: vec!["order".to_string()],
         })
-        .await;
+        .unwrap();
+    tokio::spawn(async move {
+        while let Some(res) = receiver.recv().await {
+            println!("WS response: {:?}", res);
+        }
+    });
+
+    let suffix: String = rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(8)
+        .map(char::from)
+        .collect();
+    let order_link_id = format!("test_order_{}", suffix);
+
     tokio::time::sleep(Duration::from_secs(2)).await;
-    tokio::time::sleep(Duration::from_secs(60)).await;
+    let res = client
+        .place_order(
+            PlaceOrderRequest {
+                category: Category::Linear,
+                symbol: "BTCUSDT".to_string(),
+                side: Side::Buy,
+                order_type: OrderType::Limit,
+                qty: "0.001".to_string(),
+                price: Some("40000".to_string()),
+                position_idx: Some(PositionIdx::Long),
+                order_link_id: Some(order_link_id),
+                ..PlaceOrderRequest::default()
+            },
+            5_000,
+        )
+        .await;
+    println!("CL: {:?}", res);
+
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    let res = client
+        .cancel_all_orders(
+            CancelAllOrderRequest {
+                category: Category::Linear,
+                symbol: Some("BTCUSDT".to_string()),
+                base_coin: None,
+                settle_coin: None,
+                order_filter: None,
+                stop_order_type: None,
+            },
+            5_000,
+        )
+        .await;
+    println!("CL: {:?}", res);
+
+    tokio::time::sleep(Duration::from_secs(10)).await;
 }

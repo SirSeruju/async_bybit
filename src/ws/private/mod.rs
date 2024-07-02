@@ -1,17 +1,15 @@
 pub mod model;
 
-pub const MAINNET_PRIVATE: &str = "wss://stream.bybit.com/v5/private";
-pub const TESTNET_PRIVATE: &str = "wss://stream-testnet.bybit.com/v5/private";
+pub const MAINNET_URL: &str = "wss://stream.bybit.com/v5/private";
+pub const TESTNET_URL: &str = "wss://stream-testnet.bybit.com/v5/private";
 
-use std::mem;
-use std::pin::Pin;
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use futures_util::sink::SinkExt;
-use futures_util::{Future, StreamExt};
-use tokio::sync::mpsc::UnboundedSender;
+use futures_util::StreamExt;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio_tungstenite::connect_async;
+use tokio_tungstenite::tungstenite::error::Result;
 use tokio_tungstenite::tungstenite::protocol::Message;
 
 use crate::util::{millis, sign};
@@ -29,146 +27,91 @@ fn auth_req(credentials: &Credentials) -> String {
     serde_json::to_string(&auth_req).unwrap()
 }
 
-fn send_subscribers<E: Clone>(subscribers: Arc<Mutex<Vec<UnboundedSender<E>>>>, event: E) {
-    let mut old_subscribers = subscribers.lock().unwrap();
-    let mut subscribers = Vec::with_capacity(old_subscribers.len());
-    for subscriber in old_subscribers.drain(..) {
-        if subscriber.send(event.clone()).is_ok() {
-            subscribers.push(subscriber)
-        }
-    }
-    mem::swap(&mut subscribers, &mut old_subscribers);
-}
-
-pub struct ClientBuilder {
-    credentials: Credentials,
-    on_connect: Option<fn(client: Client) -> Pin<Box<dyn Future<Output = ()> + Send>>>,
-}
-
-impl ClientBuilder {
-    pub fn new(credentials: Credentials) -> Self {
-        ClientBuilder {
-            credentials,
-            on_connect: None,
-        }
-    }
-
-    pub fn on_connect(
-        mut self,
-        on_connect: Option<fn(client: Client) -> Pin<Box<dyn Future<Output = ()> + Send>>>,
-    ) -> Self {
-        self.on_connect = on_connect;
-        self
-    }
-
-    pub fn run(self) -> Client {
-        Client::new(self.credentials, self.on_connect)
-    }
-}
-
 pub struct Client {
-    sender: UnboundedSender<Message>,
-    subscribers: Arc<Mutex<Vec<UnboundedSender<model::Response>>>>,
+    credentials: Credentials,
+    url: &'static str,
 }
 
 impl Client {
-    fn new(
-        credentials: Credentials,
-        on_connect: Option<fn(client: Client) -> Pin<Box<dyn Future<Output = ()> + Send>>>,
-    ) -> Self {
-        let (sx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-        let subscribers = Arc::new(Mutex::new(Vec::new()));
+    pub fn new(credentials: Credentials) -> Self {
+        Client {
+            credentials,
+            url: MAINNET_URL,
+        }
+    }
 
-        let sx_c = sx.clone();
-        let subscribers_c = subscribers.clone();
+    pub fn new_testnet(credentials: Credentials) -> Self {
+        Client {
+            credentials,
+            url: TESTNET_URL,
+        }
+    }
+
+    pub async fn connect(
+        &self,
+    ) -> Result<(
+        UnboundedSender<model::Op>,
+        UnboundedReceiver<model::Response>,
+    )> {
+        let (op_sender, mut op_receiver) = tokio::sync::mpsc::unbounded_channel();
+        let (res_sender, res_receiver) = tokio::sync::mpsc::unbounded_channel();
+
+        let (mut sender, mut receiver) = connect_async(self.url).await?.0.split();
+        sender
+            .send(Message::Text(auth_req(&self.credentials)))
+            .await?;
+
         tokio::spawn(async move {
-            loop {
-                let (mut sender, mut receiver) =
-                    match connect_async(MAINNET_PRIVATE).await.map(|x| x.0.split()) {
-                        Ok(v) => v,
-                        Err(e) => {
-                            eprintln!("Error: {:?}", e);
-                            tokio::time::sleep(Duration::from_secs(1)).await;
-                            continue;
-                        }
-                    };
-                sx_c.send(Message::Text(auth_req(&credentials))).unwrap();
-                let sx_c_c = sx_c.clone();
-                let subscribers_c_c = subscribers_c.clone();
-                if on_connect.is_some() {
-                    tokio::spawn(async move {
-                        on_connect.unwrap()(Client {
-                            sender: sx_c_c,
-                            subscribers: subscribers_c_c,
-                        })
-                        .await
-                    });
+            while let Some(op) = op_receiver.recv().await {
+                let op_text = serde_json::to_string(&op).unwrap();
+                if sender.send(Message::Text(op_text)).await.is_err() {
+                    break;
                 }
-                loop {
-                    tokio::select! {
-                        pck = receiver.next() => {
-                            match pck {
-                                Some(pck) => match pck {
-                                    Ok(pck) => match pck {
-                                        Message::Text(msg) => {
-                                            let data = serde_json::from_str::<model::Response>(&msg);
-                                            let data = match data {
-                                                Ok(v) => v,
-                                                Err(e) => {
-                                                    eprintln!("Error: {:?} with {:?}", e, msg);
-                                                    continue;
-                                                },
-                                            };
-                                            send_subscribers(subscribers_c.clone(), data);
-                                        },
-                                        _ => {},
-                                    },
-                                    Err(e) => eprintln!("Error: {:?}", e),
-                                },
-                                None => break,
-                            }
-
-                        }
-                        pck = rx.recv() => {
-                            match pck {
-                                Some(m) => {sender.send(m).await.unwrap();},
-                                None => {},
-                            }
-                        }
-                    }
-                }
-                tokio::time::sleep(Duration::from_secs(1)).await;
             }
         });
 
-        let sx_c = sx.clone();
+        tokio::spawn(async move {
+            while let Some(msg) = receiver.next().await {
+                match msg {
+                    Ok(Message::Text(text)) => {
+                        let data = serde_json::from_str::<model::Response>(&text);
+                        let data = match data {
+                            Ok(v) => v,
+                            Err(e) => {
+                                eprintln!("Error: {:?} with {:?}", e, text);
+                                continue;
+                            }
+                        };
+                        if res_sender.send(data).is_err() {
+                            break;
+                        }
+                    }
+                    Ok(_) => {}
+                    Err(e) => {
+                        eprintln!("Error: {}", e);
+                        break;
+                    }
+                }
+            }
+        });
+
+        let op_sender_c = op_sender.clone();
         tokio::spawn(async move {
             loop {
-                sx_c.send(Message::Text(
-                    serde_json::to_string(&model::Op {
+                if op_sender_c
+                    .send(model::Op {
                         req_id: None,
                         op: "ping".to_string(),
                         args: vec![],
                     })
-                    .unwrap(),
-                ))
-                .unwrap();
+                    .is_err()
+                {
+                    break;
+                }
                 tokio::time::sleep(Duration::from_secs(20)).await;
             }
         });
-        Client {
-            sender: sx,
-            subscribers,
-        }
-    }
 
-    pub fn subscribe(&self, sender: UnboundedSender<model::Response>) {
-        self.subscribers.lock().unwrap().push(sender);
-    }
-
-    pub fn send_op(&self, op: model::Op) {
-        self.sender
-            .send(Message::Text(serde_json::to_string(&op).unwrap()))
-            .unwrap()
+        Ok((op_sender, res_receiver))
     }
 }
