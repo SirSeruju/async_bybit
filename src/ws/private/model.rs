@@ -108,7 +108,8 @@ pub struct Position {
     /// Symbol name.
     pub symbol: String,
     /// Position side: `Buy`, `Sell`.
-    pub side: Side,
+    #[serde(deserialize_with = "empty_string_is_none")]
+    pub side: Option<Side>,
     /// Position size.
     pub size: String,
     /// Used to identify positions in different position modes.
