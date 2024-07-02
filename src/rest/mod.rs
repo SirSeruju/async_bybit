@@ -1,5 +1,8 @@
 pub mod model;
 
+pub const MAINNET_URL: &str = "https://api.bybit.com";
+pub const TESTNET_URL: &str = "https://api-testnet.bybit.com";
+
 use std::time::Duration;
 
 use reqwest::Method;
@@ -63,11 +66,11 @@ pub enum Params<T> {
 pub struct Client {
     credentials: Credentials,
     inner: reqwest::Client,
-    host: String,
+    host: &'static str,
 }
 
 impl Client {
-    pub fn new(credentials: Credentials, host: String, timeout: Option<u64>) -> Self {
+    pub fn new(credentials: Credentials, timeout: Option<u64>) -> Self {
         let mut builder: reqwest::ClientBuilder = reqwest::ClientBuilder::new();
         if let Some(timeout_secs) = timeout {
             builder = builder.timeout(Duration::from_secs(timeout_secs))
@@ -75,7 +78,19 @@ impl Client {
         Client {
             credentials,
             inner: builder.build().unwrap(),
-            host,
+            host: MAINNET_URL,
+        }
+    }
+
+    pub fn new_testnet(credentials: Credentials, timeout: Option<u64>) -> Self {
+        let mut builder: reqwest::ClientBuilder = reqwest::ClientBuilder::new();
+        if let Some(timeout_secs) = timeout {
+            builder = builder.timeout(Duration::from_secs(timeout_secs))
+        }
+        Client {
+            credentials,
+            inner: builder.build().unwrap(),
+            host: TESTNET_URL,
         }
     }
 
