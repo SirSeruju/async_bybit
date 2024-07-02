@@ -423,7 +423,7 @@ pub enum Response {
     Op(OpResponse),
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct Op {
     pub req_id: Option<String>,
     pub op: String,
